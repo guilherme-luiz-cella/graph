@@ -1,0 +1,45 @@
+De: 105491@aluno.uricer.edu.br
+Para: danielmenintortelli@uricer.edu.br
+Assunto: Trabalho Final em CG
+
+Prof. Daniel,
+
+Segue o tema do meu Trabalho Final de Computacao Grafica.
+
+Integrante:
+- Guilherme Luiz Cella (105491)
+
+Cena: visualizacao de casa moderna em dia claro, com personagem
+caminhando ao redor (estilo apresentacao arquitetonica).
+
+Tecnicas aplicadas (Secao 2 do enunciado):
+- 2a/2b: modelo .3DS (castelo) carregado via ASSIMP, com UVW Unwrap.
+- 2c:    iluminacao Phong com luz Spot rotativa e luz Point POV
+         (lanterna que segue a camera).
+- 2d:    multi-textura no chao (mistura radial cobble + grama).
+- 2e:    SkyBox CubeMap procedural (gradiente diurno).
+- 2f:    Environment Mapping em esfera metalica refletindo o cubemap.
+- 2g:    Normal Mapping em parede de tijolos (mapa gerado por heightfield).
+- 2h:    Neblina linear baseada em distancia (toggle).
+- 2i:    Transparencia (Blending alpha) na lanterna e nas vidracas.
+- 2j:    Shadow Map 2048x2048 com filtro PCF 3x3 da luz spot.
+
+Tecnicas adicionais (Secao 3):
+- 3b:    ASSIMP para animacao esqueletica (skinning com mat4[100]
+         de ossos no vertex shader).
+- 3c:    Som ambiente e passos via miniaudio.
+- 3a:    PhysX nao implementado (decidido por escopo).
+
+HUD em tela mostra os toggles e tooltip por tecnica ao apertar
+teclas 1-9. Cena roda em fullscreen.
+
+Stack: C++17, OpenGL 3.3 Core, GLFW, GLAD, GLM, ASSIMP, stb_image,
+miniaudio, stb_easy_font, CMake + FetchContent.
+
+Repositorio: <INSERIR URL DO REPOSITORIO AQUI>
+
+Imagem de referencia da cena em anexo.
+
+Atenciosamente,
+Guilherme Luiz Cella
+105491@aluno.uricer.edu.br

@@ -1,0 +1,17 @@
+build/
+.vscode/
+.idea/
+.claude/
+.cache/
+.DS_Store
+*.swp
+SESSION_LOG.md
+PLAN.md
+/tmp/
+
+# Stray extracted folder at repo root (zip extract leftover)
+/Modern_House/
+
+# Drop heavy duplicates — .fbx is what the loader uses, .ma is the Maya source.
+assets/models/house/modern_house/*.ma
+assets/models/house/modern_house/Render_01.png
