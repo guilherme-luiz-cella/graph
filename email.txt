@@ -2,43 +2,43 @@ De: 105491@aluno.uricer.edu.br
 Para: danielmenintortelli@uricer.edu.br
 Assunto: Trabalho Final em CG
 
-Prof. Daniel,
+Prof. Daniel, boa tarde.
 
-Segue o tema do meu Trabalho Final de Computacao Grafica.
+Segue o Trabalho Final de Computação Gráfica.
 
 Integrante:
 - Guilherme Luiz Cella (105491)
 
-Cena: visualizacao de casa moderna em dia claro, com personagem
-caminhando ao redor (estilo apresentacao arquitetonica).
+Cena: visualização de uma casa moderna ao ar livre em dia claro,
+com personagem feminina caminhando ao redor (estilo apresentação
+arquitetônica). O usuário pode andar pela cena em primeira pessoa.
 
-Tecnicas aplicadas (Secao 2 do enunciado):
-- 2a/2b: modelo .3DS (castelo) carregado via ASSIMP, com UVW Unwrap.
-- 2c:    iluminacao Phong com luz Spot rotativa e luz Point POV
-         (lanterna que segue a camera).
-- 2d:    multi-textura no chao (mistura radial cobble + grama).
+Técnicas implementadas (Seção 2):
+- 2a/2b: modelo .3DS (castelo de fundo) carregado via ASSIMP, com UVW Unwrap.
+- 2c:    iluminação Phong — Spot rotativa + Point POV (lanterna na câmera).
+- 2d:    multi-textura no chão (mistura radial cobble + grama).
 - 2e:    SkyBox CubeMap procedural (gradiente diurno).
-- 2f:    Environment Mapping em esfera metalica refletindo o cubemap.
-- 2g:    Normal Mapping em parede de tijolos (mapa gerado por heightfield).
-- 2h:    Neblina linear baseada em distancia (toggle).
-- 2i:    Transparencia (Blending alpha) na lanterna e nas vidracas.
-- 2j:    Shadow Map 2048x2048 com filtro PCF 3x3 da luz spot.
+- 2f:    Environment Mapping em esfera metálica refletindo o cubemap.
+- 2g:    Normal Mapping em parede de tijolos (gerado por heightfield).
+- 2h:    Neblina linear baseada em distância.
+- 2i:    Transparência (Blending alpha) na lanterna e nas vidraças.
+- 2j:    Shadow Map 2048×2048 com filtro PCF 3×3 (luz spot).
 
-Tecnicas adicionais (Secao 3):
-- 3b:    ASSIMP para animacao esqueletica (skinning com mat4[100]
-         de ossos no vertex shader).
+Adicionais (Seção 3):
+- 3b:    Animação esquelética via ASSIMP (skinning com mat4[100] no
+         vertex shader, personagem VRoid).
 - 3c:    Som ambiente e passos via miniaudio.
-- 3a:    PhysX nao implementado (decidido por escopo).
+- 3a:    PhysX não implementado (decisão de escopo).
 
-HUD em tela mostra os toggles e tooltip por tecnica ao apertar
-teclas 1-9. Cena roda em fullscreen.
+A demo roda em tela cheia. HUD na tela mostra a legenda das teclas
+1–9 e exibe um tooltip explicativo a cada técnica acionada.
 
-Stack: C++17, OpenGL 3.3 Core, GLFW, GLAD, GLM, ASSIMP, stb_image,
-miniaudio, stb_easy_font, CMake + FetchContent.
+Stack: C++17, OpenGL 3.3 Core, GLFW, GLAD, GLM, ASSIMP, miniaudio,
+stb_image, stb_easy_font, CMake + FetchContent.
 
-Repositorio: <INSERIR URL DO REPOSITORIO AQUI>
+Repositório do projeto: https://github.com/guilherme-luiz-cella/graph
 
-Imagem de referencia da cena em anexo.
+Imagem de referência da cena em anexo.
 
 Atenciosamente,
 Guilherme Luiz Cella
