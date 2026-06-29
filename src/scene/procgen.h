@@ -9,6 +9,7 @@ unsigned int genGrass(int size = 256);
 unsigned int genBrick(int size = 256);
 unsigned int genBrickNormal(int size = 256);
 unsigned int genGlass(int size = 64);
+unsigned int genSand(int size = 16); // minecraft-style pixel sand (NEAREST filter)
 unsigned int genSkyCubemap(int size = 256);
 
 // Flat solid color 2x2 texture — for procedural house panels (wall, roof, door, trim).

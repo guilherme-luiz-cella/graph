@@ -261,7 +261,7 @@ int main() {
     bool haveSkybox = true;
 
     // ----- procedural geometry -----
-    Mesh ground = makePlane(80.0f, 16.0f);
+    Mesh ground = makePlane(160.0f, 32.0f); // large enough to cover the forest
     Mesh wall   = makeCube(1.0f);   // scaled per draw
     Mesh orb    = makeSphere(0.6f, 32);
     Mesh lantern = makeCube(0.4f);
@@ -281,6 +281,22 @@ int main() {
     unsigned int texGlass;
     if (fs::exists("assets/textures/glass.png")) texGlass = loadTexture("assets/textures/glass.png");
     else { std::cerr << "[procgen] glass missing — generated\n"; texGlass = genGlass(64); }
+
+    unsigned int texSand = genSand(16);
+
+    // Sand path: a flat strip down the forest corridor (z ≈ 0), slightly above ground.
+    Mesh pathQuad;
+    {
+        const float x0 = 16.0f, x1 = 62.0f, zw = 3.0f, y = 0.03f;
+        const float tu = (x1 - x0) / 2.0f, tv = (2.0f * zw) / 2.0f; // 1 tile / 2m
+        glm::vec3 n(0, 1, 0), t(1, 0, 0);
+        pathQuad.vertices = {
+            {{x0, y, -zw}, n, {0, 0},   t}, {{x1, y, -zw}, n, {tu, 0},  t},
+            {{x1, y,  zw}, n, {tu, tv}, t}, {{x0, y,  zw}, n, {0, tv},  t},
+        };
+        pathQuad.indices = {0, 1, 2, 0, 2, 3};
+        pathQuad.setup();
+    }
 
     // ----- ASSIMP-loaded models -----
     auto reportBBox = [](const char* tag, auto& verts) {
@@ -540,6 +556,9 @@ int main() {
         g.useMultiTex = true;
         items.push_back(g);
 
+        DrawItem path; path.mesh = &pathQuad; path.diffuse0 = texSand;
+        items.push_back(path);
+
         DrawItem w; w.mesh = &wall;
         w.xform = glm::translate(glm::mat4(1.0f), {-14.0f, 2.0f, -8.0f});
         w.xform = glm::scale(w.xform, {6.0f, 4.0f, 0.5f});
@@ -634,12 +653,12 @@ int main() {
     // Rotate a limb (upper+lower+hand/foot) rigidly about the upper joint, in mesh
     // space, so it swings without tearing. angle=0 → bind pose.
     auto swingLimb = [&](const char* upper, const char* lower, const char* tip,
-                         float ang) {
+                         float ang, glm::vec3 axis) {
         auto itU = girl.boneMap.find(upper);
         if (itU == girl.boneMap.end()) return;
         glm::vec3 pivot = glm::vec3(glm::inverse(itU->second.offset)[3]);
         glm::mat4 Rw = glm::translate(glm::mat4(1.0f), pivot)
-                     * glm::rotate(glm::mat4(1.0f), ang, glm::vec3(1, 0, 0))
+                     * glm::rotate(glm::mat4(1.0f), ang, axis)
                      * glm::translate(glm::mat4(1.0f), -pivot);
         for (const char* nm : {upper, lower, tip}) {
             auto it = girl.boneMap.find(nm);
@@ -802,10 +821,13 @@ int main() {
             girlAnim.update(dt);
             // Fake walk cycle: arms/legs swing opposite, only while moving in 3rd person.
             float a = (g_thirdPerson && moving) ? std::sin(now * 9.0f) * glm::radians(35.0f) : 0.0f;
-            swingLimb("J_Bip_L_UpperArm", "J_Bip_L_LowerArm", "J_Bip_L_Hand",  a);
-            swingLimb("J_Bip_R_UpperArm", "J_Bip_R_LowerArm", "J_Bip_R_Hand", -a);
-            swingLimb("J_Bip_L_UpperLeg", "J_Bip_L_LowerLeg", "J_Bip_L_Foot", -a * 0.8f);
-            swingLimb("J_Bip_R_UpperLeg", "J_Bip_R_LowerLeg", "J_Bip_R_Foot",  a * 0.8f);
+            glm::vec3 ax(1, 0, 0), ay(0, 1, 0);
+            // Arms are T-posed along X → swing about Y (forward/back). Legs hang
+            // down → swing about X. Opposite phases L/R and arm/leg.
+            swingLimb("J_Bip_L_UpperArm", "J_Bip_L_LowerArm", "J_Bip_L_Hand",  a, ay);
+            swingLimb("J_Bip_R_UpperArm", "J_Bip_R_LowerArm", "J_Bip_R_Hand", -a, ay);
+            swingLimb("J_Bip_L_UpperLeg", "J_Bip_L_LowerLeg", "J_Bip_L_Foot", -a * 0.8f, ax);
+            swingLimb("J_Bip_R_UpperLeg", "J_Bip_R_LowerLeg", "J_Bip_R_Foot",  a * 0.8f, ax);
         }
 
         // cinematic camera: slow orbit around scene center

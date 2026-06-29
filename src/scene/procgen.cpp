@@ -94,6 +94,28 @@ unsigned int genGrass(int size) {
     return uploadRGB(px, size, size, true);
 }
 
+// Minecraft-style sand: pale tan with per-texel speckle, kept pixelated (NEAREST).
+unsigned int genSand(int size) {
+    std::vector<uint8_t> px(size * size * 3);
+    for (int y = 0; y < size; ++y) for (int x = 0; x < size; ++x) {
+        float n = hash(x, y, 77);
+        int i = (y * size + x) * 3;
+        px[i + 0] = (uint8_t)(208 + n * 34);
+        px[i + 1] = (uint8_t)(190 + n * 34);
+        px[i + 2] = (uint8_t)(140 + n * 30);
+    }
+    unsigned int id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8, size, size, 0, GL_RGB, GL_UNSIGNED_BYTE, px.data());
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    return id;
+}
+
 // Brick pattern: rectangular tiles with mortar, slight color variation
 unsigned int genBrick(int size) {
     std::vector<uint8_t> px(size * size * 3);
