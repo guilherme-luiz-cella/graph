@@ -692,9 +692,10 @@ int main() {
     float playerVelY = 0.0f;
     bool  grounded   = true;
 
-    // Spring-bone secondary motion for the chest (VRoid J_Sec_*_Bust bones).
-    // Damped harmonic oscillator pushed by the torso's vertical motion → lagged jiggle.
+    // Spring-bone secondary motion: damped oscillators pushed by the torso's
+    // vertical motion → lagged jiggle for chest (bust) and hips (rump).
     float bustAng = 0.0f, bustVel = 0.0f;
+    float rumpAng = 0.0f, rumpVel = 0.0f;
     float prevBounce = 0.0f;   // last frame's torso vertical offset (for spring drive)
 
     // Resolve a logical bone to the rig's actual key: exact name first, else the
@@ -741,6 +742,17 @@ int main() {
         if (L.ids.empty()) return;
         glm::mat4 Rw = glm::translate(glm::mat4(1.0f), L.pivot)
                      * glm::rotate(glm::mat4(1.0f), ang, axis)
+                     * glm::translate(glm::mat4(1.0f), -L.pivot);
+        for (int id : L.ids)
+            if (id < (int)girlAnim.finalBoneMatrices.size())
+                girlAnim.finalBoneMatrices[id] = Rw;
+    };
+    // Two-axis variant for the bust: bounce (X) + side sway (Z) = a rounder jiggle.
+    auto swing2 = [&](const Limb& L, float angX, float angZ) {
+        if (L.ids.empty()) return;
+        glm::mat4 Rw = glm::translate(glm::mat4(1.0f), L.pivot)
+                     * glm::rotate(glm::mat4(1.0f), angX, glm::vec3(1, 0, 0))
+                     * glm::rotate(glm::mat4(1.0f), angZ, glm::vec3(0, 0, 1))
                      * glm::translate(glm::mat4(1.0f), -L.pivot);
         for (int id : L.ids)
             if (id < (int)girlAnim.finalBoneMatrices.size())
@@ -925,8 +937,8 @@ int main() {
             float oneWay = (HALF * 2.0f) / SPD;
             float ph = std::fmod(now, 2.0f * oneWay);
             float x, yawDeg;
-            if (ph < oneWay) { x = -HALF + SPD * ph;             yawDeg = -90.0f; } // → +X
-            else             { x =  HALF - SPD * (ph - oneWay);  yawDeg =  90.0f; } // → -X
+            if (ph < oneWay) { x = -HALF + SPD * ph;             yawDeg =  90.0f; } // → +X
+            else             { x =  HALF - SPD * (ph - oneWay);  yawDeg = -90.0f; } // → -X
             bounce = std::fabs(std::sin(now * 9.0f)) * 0.05f;
             glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, ZLANE));
             m = glm::rotate(m, glm::radians(yawDeg), glm::vec3(0, 1, 0));
@@ -944,33 +956,38 @@ int main() {
         girlModel = girlModel * girlFit;   // scale/ground the rig into world space
         if (haveGirl) {
             girlAnim.update(dt);
-            // Arms rest in an A-pose diagonal, legs hang straight down. Both swing
-            // forward/back about the world left-right axis X (a sagittal pendulum).
             glm::vec3 ax(1, 0, 0);
+
+            // Springs first (so the rump bounce can fold into the leg swing). Both are
+            // very underdamped → big, lingering, anime-style wobble.
+            float bounceVel = (bounce - prevBounce) / std::max(dt, 1e-4f);
+            prevBounce = bounce;
+            bustVel += (-bounceVel * 95.0f - 20.0f * bustAng - 0.6f * bustVel) * dt;
+            bustAng += bustVel * dt;
+            bustAng = glm::clamp(bustAng, -1.3f, 1.3f);
+            rumpVel += (-bounceVel * 70.0f - 24.0f * rumpAng - 0.8f * rumpVel) * dt;
+            rumpAng += rumpVel * dt;
+            rumpAng = glm::clamp(rumpAng, -0.9f, 0.9f);
+            float rear = rumpAng * 0.5f;   // hip counter-bounce folded into both legs
+
+            // Arms rest A-pose diagonal, legs hang down → swing forward/back about X.
             if (flying) {
                 swing(lArm, glm::radians(-150.0f), ax); swing(rArm, glm::radians(-150.0f), ax);
-                swing(lLeg, glm::radians(10.0f), ax);   swing(rLeg, glm::radians(10.0f), ax);
+                swing(lLeg, glm::radians(10.0f) + rear, ax); swing(rLeg, glm::radians(10.0f) + rear, ax);
             } else if (npcJumping) {
-                // Arms swing forward/up on the rise, legs tuck — symmetric.
                 float armUp = -glm::radians(40.0f) - npcJump * glm::radians(50.0f);
                 swing(lArm, armUp, ax); swing(rArm, armUp, ax);
                 float legTuck = npcJump * glm::radians(25.0f);
-                swing(lLeg, legTuck, ax); swing(rLeg, legTuck, ax);
+                swing(lLeg, legTuck + rear, ax); swing(rLeg, legTuck + rear, ax);
             } else {
-                // Walk: arms and legs swing opposite (contralateral).
                 float a = walkActive ? std::sin(now * 9.0f) * glm::radians(35.0f) : 0.0f;
                 swing(lArm,  a, ax); swing(rArm, -a, ax);
-                swing(lLeg, -a, ax); swing(rLeg,  a, ax);
+                swing(lLeg, -a + rear, ax); swing(rLeg, a + rear, ax);
             }
 
-            // Chest spring: torso vertical accel drives a lightly-damped oscillator.
-            float bounceVel = (bounce - prevBounce) / std::max(dt, 1e-4f);
-            prevBounce = bounce;
-            bustVel += (-bounceVel * 60.0f - 22.0f * bustAng - 0.9f * bustVel) * dt;
-            bustAng += bustVel * dt;
-            bustAng = glm::clamp(bustAng, -1.05f, 1.05f);
-            swing(lBust, bustAng, ax);
-            swing(rBust, bustAng, ax);
+            // Bust: bounce on X + mirrored side-sway on Z → rounder, livelier jiggle.
+            swing2(lBust, bustAng,  bustAng * 0.4f);
+            swing2(rBust, bustAng, -bustAng * 0.4f);
         }
         bool showGirl = haveGirl && (g_thirdPerson || g_npcVisible);
         if (showGirl) {   // upload this frame's bone matrices once; all girl passes share the UBO
