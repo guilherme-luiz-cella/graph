@@ -394,6 +394,8 @@ int main() {
     glm::mat4 loraxXform(1.0f);
     glm::vec3 leafSpawn(0.0f);
     float leafSpawnRadius = 1.5f;
+    glm::vec3 loraxLo(0.0f), loraxCenter(0.0f); // for grounding forest instances
+    float loraxBaseScale = 1.0f;
     if (fs::exists("assets/models/lorax/lorax_tree.glb")) {
         loraxTree.load("assets/models/lorax/lorax_tree.glb");
         haveLorax = !loraxTree.meshes.empty();
@@ -402,6 +404,7 @@ int main() {
         glm::vec3 c = (lo + hi) * 0.5f;
         float md = std::max(hi.x - lo.x, std::max(hi.y - lo.y, hi.z - lo.z));
         float s = (md > 1e-4f) ? (8.0f / md) : 1.0f;
+        loraxLo = lo; loraxCenter = c; loraxBaseScale = s;
         loraxXform = glm::translate(glm::mat4(1.0f), glm::vec3(12.0f, 0.0f, 8.0f))
                    * glm::scale(glm::mat4(1.0f), glm::vec3(s))
                    * glm::translate(glm::mat4(1.0f), glm::vec3(-c.x, -lo.y, -c.z));
@@ -565,6 +568,27 @@ int main() {
         if (haveLorax) {
             DrawItem tr; tr.model = &loraxTree; tr.xform = loraxXform;
             items.push_back(tr);
+
+            // Forest grid with a clear path: a corridor along +X (z ≈ 0) stays empty.
+            // Deterministic hash jitter so trees don't flicker frame to frame.
+            auto h = [](int a, int b) {
+                uint32_t x = (uint32_t)a * 73856093u ^ (uint32_t)b * 19349663u;
+                x = (x ^ (x >> 13)) * 1274126177u;
+                return (float)((x ^ (x >> 16)) & 0xFFFF) / 65535.0f;
+            };
+            for (int i = 0; i < 8; ++i) for (int j = 0; j < 9; ++j) {
+                float px = 26.0f + i * 4.5f + (h(i, j) - 0.5f) * 3.0f;
+                float pz = -18.0f + j * 4.5f + (h(i + 99, j) - 0.5f) * 3.0f;
+                if (std::fabs(pz) < 3.0f) continue;        // keep the path clear
+                float sc = loraxBaseScale * (0.6f + h(i, j + 7) * 0.6f);
+                float yaw = h(i + 3, j + 5) * 6.2832f;
+                glm::mat4 x = glm::translate(glm::mat4(1.0f), glm::vec3(px, 0.0f, pz))
+                            * glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0, 1, 0))
+                            * glm::scale(glm::mat4(1.0f), glm::vec3(sc))
+                            * glm::translate(glm::mat4(1.0f), glm::vec3(-loraxCenter.x, -loraxLo.y, -loraxCenter.z));
+                DrawItem t; t.model = &loraxTree; t.xform = x;
+                items.push_back(t);
+            }
         }
         if (!minecraftHouse.meshes.empty()) {
             DrawItem m; m.model = &minecraftHouse; m.xform = mcXform;
@@ -877,19 +901,11 @@ int main() {
             if (haveSkybox) { glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_CUBE_MAP, skybox.cubemap); s.setInt("envMap", 4); }
         };
 
-        // opaque static geometry
+        // opaque static geometry (incl. house: glass is alpha-cutout, see §useAlpha==2)
         setSceneUniforms(scene);
         for (auto& it : items)
-            if (!it.useAlpha && !it.useTexAlpha)
+            if (!it.useAlpha)
                 renderItem(it, scene, tog.multiTex, tog.normalMap, tog.envMap);
-
-        // glass props (house): texture alpha → see-through windows. Always drawn
-        // (not gated by the blending toggle) so the house never disappears.
-        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        for (auto& it : items)
-            if (it.useTexAlpha)
-                renderItem(it, scene, tog.multiTex, tog.normalMap, tog.envMap);
-        glDisable(GL_BLEND);
 
         // animated girl
         if (haveGirl) {

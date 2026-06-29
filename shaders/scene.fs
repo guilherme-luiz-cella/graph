@@ -81,6 +81,9 @@ void main() {
     // Env-mapped objects (orb) have no diffuse texture — use neutral metallic
     // base so reflection doesn't pick up garbage from unit 0 bindings.
     vec4 baseTex = (useEnvMap == 1) ? vec4(0.6, 0.6, 0.65, 1.0) : texture(tex_diffuse0, vUV);
+    // House glass (useAlpha==2): alpha cutout → transparent texels become holes you
+    // can see the interior through, without transparency depth-ordering problems.
+    if (useAlpha == 2 && baseTex.a < 0.5) discard;
     if (useMultiTex == 1) {
         vec4 second = texture(tex_diffuse1, vUV * 2.0);
         // radial mask from world origin: cobble inside courtyard, grass outside
@@ -122,7 +125,7 @@ void main() {
     float f = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
     color = mix(fogColor, color, f);
 
-    // 1 = fixed translucency (lantern), 2 = texture-driven alpha (house glass)
-    float a = (useAlpha == 1) ? baseTex.a * 0.45 : (useAlpha == 2 ? baseTex.a : 1.0);
+    // 1 = fixed translucency (lantern); 2 = alpha-cutout (house glass, opaque survivors)
+    float a = (useAlpha == 1) ? baseTex.a * 0.45 : 1.0;
     FragColor = vec4(color, a);
 }
