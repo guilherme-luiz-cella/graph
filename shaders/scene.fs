@@ -20,6 +20,9 @@ uniform int  useNormalMap;
 uniform int  useEnvMap;
 uniform int  useAlpha;            // blending pass (lantern glass)
 uniform int  useShadows;
+uniform int  useEmissive;         // unlit portal surface
+uniform vec3 emissiveColor;
+uniform float uTime;              // animates the portal swirl
 
 // camera + lights
 uniform vec3 viewPos;
@@ -52,6 +55,20 @@ float shadowCalc(vec4 fragPosLight, vec3 N, vec3 L) {
 }
 
 void main() {
+    if (useEmissive == 1) {
+        // Elliptical portal with swirling rings + glowing rim (Portal-style).
+        vec2 p = (vUV - 0.5) * 2.0;          // -1..1 across the quad
+        float r = length(p);
+        if (r > 1.0) discard;                 // clip quad corners to an ellipse
+        float ang = atan(p.y, p.x);
+        float swirl = 0.6 + 0.4 * sin(r * 16.0 - uTime * 6.0 + ang * 2.0);
+        float rim   = smoothstep(0.6, 1.0, r); // bright edge ring
+        vec3 c = emissiveColor * swirl + emissiveColor * rim * 1.5;
+        c += vec3(1.0) * rim * 0.3;           // white-hot rim highlight
+        FragColor = vec4(c, 1.0);
+        return;
+    }
+
     vec3 N = normalize(vNormal);
     if (useNormalMap == 1) {
         vec3 T = normalize(vTangent);
@@ -105,6 +122,7 @@ void main() {
     float f = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
     color = mix(fogColor, color, f);
 
-    float a = (useAlpha == 1) ? baseTex.a * 0.45 : 1.0;
+    // 1 = fixed translucency (lantern), 2 = texture-driven alpha (house glass)
+    float a = (useAlpha == 1) ? baseTex.a * 0.45 : (useAlpha == 2 ? baseTex.a : 1.0);
     FragColor = vec4(color, a);
 }
