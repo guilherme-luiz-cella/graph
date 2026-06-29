@@ -457,7 +457,7 @@ int main() {
     glm::mat4 loraxXform(1.0f);
     glm::vec3 leafSpawn(0.0f);
     float leafSpawnRadius = 1.5f;
-    glm::vec3 loraxLo(0.0f), loraxCenter(0.0f); // for grounding forest instances
+    glm::vec3 loraxLo(0.0f), loraxCenter(0.0f);
     float loraxBaseScale = 1.0f;
     if (fs::exists("assets/models/lorax/lorax_tree.glb")) {
         loraxTree.load("assets/models/lorax/lorax_tree.glb");
@@ -778,6 +778,16 @@ int main() {
             playerVelY -= 16.0f * dt;                    // gravity
             cam.pos.y += playerVelY * dt;
             if (cam.pos.y <= EYE_H) { cam.pos.y = EYE_H; playerVelY = 0.0f; grounded = true; }
+
+            // Minecraft house collision: solid AABB footprint, revert XZ if entered.
+            // ponytail: blocks the whole box (no door); good enough for a prop.
+            if (!minecraftHouse.meshes.empty()) {
+                const float pad = 0.3f;
+                if (cam.pos.x > mcWLo.x - pad && cam.pos.x < mcWHi.x + pad &&
+                    cam.pos.z > mcWLo.z - pad && cam.pos.z < mcWHi.z + pad) {
+                    cam.pos.x = prevCamPos.x; cam.pos.z = prevCamPos.z;
+                }
+            }
         }
 
         // LMB: serenade if aiming at turret, else fire blue portal. RMB: orange.
@@ -849,8 +859,21 @@ int main() {
         }
 
         // Portal teleport: entering an active portal pops you out the linked one.
-        portalTeleport(portalBlue, portalOrange, cam.pos, cam.front, cam.yaw, cam.pitch,
-                       now, portalCooldownUntil);
+        // Player mode walks on the floor, so the eye (EYE_H) is too high to fall
+        // into a floor portal (normal up, 0.5m slab). Probe near the feet first so
+        // stepping on a floor portal teleports; fall back to the eye for walls.
+        bool teleported = false;
+        if (g_playerMode) {
+            glm::vec3 feet = cam.pos; feet.y = 0.3f;
+            if (portalTeleport(portalBlue, portalOrange, feet, cam.front, cam.yaw, cam.pitch,
+                               now, portalCooldownUntil)) {
+                cam.pos.x = feet.x; cam.pos.z = feet.z; cam.pos.y = EYE_H; // stay grounded
+                playerVelY = 0.0f; teleported = true;
+            }
+        }
+        if (!teleported)
+            portalTeleport(portalBlue, portalOrange, cam.pos, cam.front, cam.yaw, cam.pitch,
+                           now, portalCooldownUntil);
 
         // Turret AI (Portal sentry): tracks the player when near, else slow scan.
         if (!turret.meshes.empty()) {

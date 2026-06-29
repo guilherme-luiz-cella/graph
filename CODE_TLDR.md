@@ -72,6 +72,13 @@ arquivo e a ideia. Tudo é OpenGL 3.3 Core + C++17.
   redemoinho animado (`sin(r*16 - tempo)`) e borda brilhante.
 - **Câmera 1ª/3ª pessoa** (`F5`) — em 3ª, a `girl` vira avatar na posição do jogador
   com um "andar" procedural (bob/sway quando se move; o modelo não tem clip real).
+- **Jiggle de bust/rear** — `main.cpp` (loop do avatar/NPC): o bob vertical do torso
+  (`bounce`) vira velocidade (`bounceVel = (bounce-prevBounce)/dt`) que alimenta dois
+  **springs amortecidos** (mola-massa: `vel += (-drive*bounceVel - k*ang - c*vel)*dt`).
+  O **bust** usa os ossos `J_Sec_*_Bust1` com jiggle de 2 eixos (X = quica, Z = sway
+  lateral espelhado → balanço mais redondo, `swing2`); o **rear** (`rumpAng`) não tem
+  osso próprio, então é **fingido** dobrando o contra-balanço do quadril nas duas pernas
+  (`+ rear` no swing de `lLeg`/`rLeg`). Ângulos com `clamp` pra não estourar.
 
 ---
 

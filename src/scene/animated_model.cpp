@@ -5,7 +5,6 @@
 #include <assimp/postprocess.h>
 #include <iostream>
 
-// Load embedded aiTexture (glb/fbx) → GL texture. mHeight==0 means compressed bytes in pcData.
 static unsigned int loadEmbeddedTexture(const aiTexture* t) {
     unsigned int id = 0;
     glGenTextures(1, &id);
@@ -82,7 +81,7 @@ static void setBoneSlot(AnimVertex& v, int id, float w) {
             return;
         }
     }
-    // already 4 bones — drop the smallest if new weight bigger
+
     int minI = 0;
     for (int i = 1; i < MAX_BONE_INFLUENCE; ++i)
         if (v.weights[i] < v.weights[minI]) minI = i;

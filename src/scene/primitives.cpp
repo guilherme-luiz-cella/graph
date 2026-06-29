@@ -21,7 +21,7 @@ Mesh makePlane(float size, float uvTile) {
 Mesh makeCube(float size) {
     Mesh m;
     float h = size * 0.5f;
-    // 6 faces, 4 verts each, tangent points along +X face-relative (good enough for normal map demo)
+
     struct F { glm::vec3 n; glm::vec3 t; glm::vec3 v[4]; };
     F faces[6] = {
         {{ 0, 0, 1},{1,0,0},{{-h,-h, h},{ h,-h, h},{ h, h, h},{-h, h, h}}}, // +Z
