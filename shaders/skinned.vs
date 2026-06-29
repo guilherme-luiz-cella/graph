@@ -6,8 +6,8 @@ layout(location = 3) in vec3 aTangent;
 layout(location = 4) in ivec4 aBoneIDs;
 layout(location = 5) in vec4  aWeights;
 
-const int MAX_BONES = 100;
-uniform mat4 bones[MAX_BONES];
+const int MAX_BONES = 450;
+layout(std140) uniform Bones { mat4 bones[MAX_BONES]; };
 
 uniform mat4 model;
 uniform mat4 view;

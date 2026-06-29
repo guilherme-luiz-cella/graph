@@ -3,8 +3,8 @@ layout(location = 0) in vec3 aPos;
 layout(location = 4) in ivec4 aBoneIDs;
 layout(location = 5) in vec4  aWeights;
 
-const int MAX_BONES = 100;
-uniform mat4 bones[MAX_BONES];
+const int MAX_BONES = 450;
+layout(std140) uniform Bones { mat4 bones[MAX_BONES]; };
 uniform mat4 lightSpaceMatrix;
 uniform mat4 model;
 

@@ -117,7 +117,7 @@ void main() {
         vec3 V = normalize(vFragPos - viewPos);
         vec3 R = reflect(V, N);
         vec3 envCol = texture(envMap, R).rgb;
-        color = mix(color, envCol, 0.6);
+        color = mix(color, envCol, 0.8);
     }
 
     // fog

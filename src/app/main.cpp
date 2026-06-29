@@ -39,6 +39,9 @@ static bool g_orangePending = false;  // RMB: orange portal
 static bool g_gunVisible = true;      // G toggles portal gun viewmodel
 static bool g_grabTogglePending = false; // E: grab/drop cube
 static bool g_thirdPerson = false;    // F5: 1st/3rd person camera
+static bool g_playerMode = false;     // F: free camera <-> grounded player (gravity+jump)
+static bool g_npcVisible = true;      // N: show the NPC girl (1st person)
+static bool g_npcWalk    = false;     // B: NPC walks a path (true) vs jumps in place (false)
 
 // ----- HUD overlay state -----
 static std::string g_hudText;
@@ -95,7 +98,7 @@ static void onMouseButton(GLFWwindow*, int button, int action, int /*mods*/) {
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) g_orangePending = true;
 }
 
-static bool wasPressed[14] = {};
+static bool wasPressed[18] = {};
 static bool g_stopMusicPending = false;
 static bool edge(GLFWwindow* w, int key, int slot) {
     bool down = glfwGetKey(w, key) == GLFW_PRESS;
@@ -113,12 +116,24 @@ static void toggle(bool& b, const char* name, const char* tooltip) {
 
 static void input(GLFWwindow* w) {
     if (glfwGetKey(w, GLFW_KEY_ESCAPE) == GLFW_PRESS) glfwSetWindowShouldClose(w, true);
-    if (glfwGetKey(w, GLFW_KEY_W) == GLFW_PRESS) cam.key(0, dt);
-    if (glfwGetKey(w, GLFW_KEY_S) == GLFW_PRESS) cam.key(1, dt);
-    if (glfwGetKey(w, GLFW_KEY_A) == GLFW_PRESS) cam.key(2, dt);
-    if (glfwGetKey(w, GLFW_KEY_D) == GLFW_PRESS) cam.key(3, dt);
-    if (glfwGetKey(w, GLFW_KEY_SPACE) == GLFW_PRESS) cam.key(4, dt);
-    if (glfwGetKey(w, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) cam.key(5, dt);
+    if (g_playerMode) {
+        // Grounded walk: move on the XZ plane only (look pitch can't lift you off
+        // the floor). Vertical motion is gravity + jump, integrated in the loop.
+        glm::vec3 flat(cam.front.x, 0.0f, cam.front.z);
+        if (glm::length(flat) > 1e-4f) flat = glm::normalize(flat);
+        float v = cam.speed * dt;
+        if (glfwGetKey(w, GLFW_KEY_W) == GLFW_PRESS) cam.pos += flat * v;
+        if (glfwGetKey(w, GLFW_KEY_S) == GLFW_PRESS) cam.pos -= flat * v;
+        if (glfwGetKey(w, GLFW_KEY_A) == GLFW_PRESS) cam.key(2, dt); // strafe (already horizontal)
+        if (glfwGetKey(w, GLFW_KEY_D) == GLFW_PRESS) cam.key(3, dt);
+    } else {
+        if (glfwGetKey(w, GLFW_KEY_W) == GLFW_PRESS) cam.key(0, dt);
+        if (glfwGetKey(w, GLFW_KEY_S) == GLFW_PRESS) cam.key(1, dt);
+        if (glfwGetKey(w, GLFW_KEY_A) == GLFW_PRESS) cam.key(2, dt);
+        if (glfwGetKey(w, GLFW_KEY_D) == GLFW_PRESS) cam.key(3, dt);
+        if (glfwGetKey(w, GLFW_KEY_SPACE) == GLFW_PRESS) cam.key(4, dt);
+        if (glfwGetKey(w, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS) cam.key(5, dt);
+    }
     if (edge(w, GLFW_KEY_1, 0)) toggle(tog.multiTex,   "1 multi-textura",  "Spec 2d. Chao mistura radial cobble (centro) -> grama (borda) via smoothstep.");
     if (edge(w, GLFW_KEY_2, 1)) toggle(tog.normalMap,  "2 normal map",     "Spec 2g. Parede de tijolos usa normal map procedural derivado de heightfield.");
     if (edge(w, GLFW_KEY_3, 2)) toggle(tog.envMap,     "3 env map",        "Spec 2f. Esfera reflete cubemap via reflect(view, N). Mix 60% reflexao.");
@@ -132,6 +147,9 @@ static void input(GLFWwindow* w) {
     if (edge(w, GLFW_KEY_G, 11)) toggle(g_gunVisible,  "G portal gun",     "Mostra/esconde a portal gun na mao. Escondida = nao dispara.");
     if (edge(w, GLFW_KEY_E, 12)) g_grabTogglePending = true;
     if (edge(w, GLFW_KEY_F5, 13)) toggle(g_thirdPerson, "F5 camera",        "Alterna 1a / 3a pessoa (estilo Minecraft).");
+    if (edge(w, GLFW_KEY_F, 14)) toggle(g_playerMode,  "F modo jogador",   "Camera livre <-> Jogador no chao (gravidade, Space pula). Voo so na camera livre.");
+    if (edge(w, GLFW_KEY_N, 16)) toggle(g_npcVisible,  "N npc",            "Mostra/esconde a garota NPC (1a pessoa).");
+    if (edge(w, GLFW_KEY_B, 17)) toggle(g_npcWalk,     "B andar/pular",    "NPC anda em volta (ON) ou pula no lugar (OFF) p/ mostrar a fisica.");
     if (edge(w, GLFW_KEY_P, 10)) g_stopMusicPending = true;
 }
 
@@ -144,7 +162,8 @@ Author: Guilherme Luiz Cella (105491)
 Controles:
   WASD            Movimento
   Mouse           Olhar
-  Space / Shift   Subir / Descer
+  Space / Shift   Subir / Descer (camera livre) | Space = pular (jogador)
+  F               Modo camera livre <-> jogador (gravidade)
   Esc             Sair
 
 Toggles (técnicas):
@@ -187,7 +206,6 @@ static Mesh buildPortalQuad() {
     return m;
 }
 
-
 int main() {
     banner();
     if (!glfwInit()) { std::cerr << "glfw init fail\n"; return 1; }
@@ -227,6 +245,18 @@ int main() {
     Shader depthSkinned; depthSkinned.load("shaders/skinned_depth.vs", "shaders/depth.fs");
     setupShadow();
     HUD hud; hud.setup();
+
+    // Bone matrices live in a UBO (not a plain uniform array): this rig has 432
+    // bones, far past the ~240-mat4 default-block component limit on this GL.
+    unsigned int boneUBO = 0;
+    glGenBuffers(1, &boneUBO);
+    glBindBuffer(GL_UNIFORM_BUFFER, boneUBO);
+    glBufferData(GL_UNIFORM_BUFFER, MAX_BONES * sizeof(glm::mat4), nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 0, boneUBO);
+    for (const Shader* s : {&sceneSkinned, &depthSkinned}) {
+        unsigned int bi = glGetUniformBlockIndex(s->id, "Bones");
+        if (bi != GL_INVALID_INDEX) glUniformBlockBinding(s->id, bi, 0);
+    }
 
     // ----- skybox (real files if present, else procedural gradient) -----
     Skybox skybox;
@@ -358,7 +388,8 @@ int main() {
     AnimatedModel girl;
     Animator girlAnim;
     // Accept either .fbx (Mixamo) or .glb (Khronos CesiumMan etc) — assimp handles both.
-    for (const char* p : {"assets/models/girl/girl.fbx", "assets/models/girl/girl.glb"}) {
+    for (const char* p : {"assets/models/girl/a21_-_pc_-_lila_decyrus_swimsuit.glb",
+                          "assets/models/girl/girl.fbx", "assets/models/girl/girl.glb"}) {
         if (fs::exists(p)) {
             girl.load(p);
             girlAnim.setModel(&girl);
@@ -368,6 +399,21 @@ int main() {
             break;
         }
     }
+    // Auto-fit: some rigs export huge / off-origin (this one is ~61 units tall at
+    // y≈30). Scale to ~1.7m and bake a feet-to-origin offset so placement is sane.
+    glm::vec3 girlFitCtr(0.0f); float girlFitScale = 1.0f;
+    if (!girl.meshes.empty()) {
+        glm::vec3 lo(1e9f), hi(-1e9f);
+        for (auto& m : girl.meshes) for (auto& v : m.vertices) { lo = glm::min(lo, v.pos); hi = glm::max(hi, v.pos); }
+        glm::vec3 c = (lo + hi) * 0.5f;
+        float h = hi.y - lo.y;
+        girlFitScale = (h > 1e-3f) ? (1.7f / h) : 1.0f;
+        girlFitCtr = glm::vec3(c.x, lo.y, c.z);   // xz centre, feet at min-y
+        std::cerr << "[girl] fit scale=" << girlFitScale << " feetCtr=("
+                  << girlFitCtr.x << "," << girlFitCtr.y << "," << girlFitCtr.z << ")\n";
+    }
+    glm::mat4 girlFit = glm::scale(glm::mat4(1.0f), glm::vec3(girlFitScale))
+                      * glm::translate(glm::mat4(1.0f), -girlFitCtr);
 
     // ----- portal gun (hand viewmodel) + grabbable cube -----
     auto loadProp = [](const char* path, Model& m, glm::vec3& center, float& scale,
@@ -628,20 +674,8 @@ int main() {
         return items;
     };
 
-    // girl wanders: orbit at radius ~16 with low-freq noise so the path reads as
-    // strolling, not a turntable. CesiumMan glb is Z-up → flip via flag.
+    // CesiumMan-style Z-up rigs need a -90° X flip; detect via presence of clips.
     bool girlNeedsZFlip = (girl.scene && girl.scene->mNumAnimations > 0);
-    auto girlXform = [&](float t) {
-        float a = t * 0.25f;
-        float r = 16.0f + 1.5f * std::sin(t * 0.7f) + 0.7f * std::sin(t * 1.7f + 1.0f);
-        glm::vec3 pos(std::cos(a) * r, 0.0f, std::sin(a) * r);
-        // facing tangent to path (perpendicular to radial)
-        float facing = -a + glm::radians(90.0f);
-        glm::mat4 m = glm::translate(glm::mat4(1.0f), pos);
-        m = glm::rotate(m, facing, glm::vec3(0, 1, 0));
-        if (girlNeedsZFlip) m = glm::rotate(m, glm::radians(-90.0f), glm::vec3(1, 0, 0));
-        return m;
-    };
 
     // 3rd-person avatar (the girl) facing + procedural limb swing while moving.
     // ponytail: girl.glb has 0 anim clips, so the walk is faked by rotating the
@@ -650,9 +684,21 @@ int main() {
     const float GIRL_YAW_FIX = 0.0f;   // deg; +Z faces look dir → camera sees back
     glm::vec3 prevCamPos = cam.pos;
 
+    // Player-mode physics: simple vertical-only gravity over a flat floor.
+    // ponytail: ground is the y=0 plane, eye sits at EYE_H. Upgrade to terrain
+    // height sampling / AABB collision if the floor stops being flat.
+    const float EYE_H = 1.7f;
+    float playerVelY = 0.0f;
+    bool  grounded   = true;
+
+    // Spring-bone secondary motion for the chest (VRoid J_Sec_*_Bust bones).
+    // Damped harmonic oscillator pushed by the torso's vertical motion → lagged jiggle.
+    float bustAng = 0.0f, bustVel = 0.0f;
+    float prevBounce = 0.0f;   // last frame's torso vertical offset (for spring drive)
+
     // Rotate a limb (upper+lower+hand/foot) rigidly about the upper joint, in mesh
     // space, so it swings without tearing. angle=0 → bind pose.
-    auto swingLimb = [&](const char* upper, const char* lower, const char* tip,
+    auto swingLimb = [&](const std::string& upper, const std::string& lower, const std::string& tip,
                          float ang, glm::vec3 axis) {
         auto itU = girl.boneMap.find(upper);
         if (itU == girl.boneMap.end()) return;
@@ -660,12 +706,45 @@ int main() {
         glm::mat4 Rw = glm::translate(glm::mat4(1.0f), pivot)
                      * glm::rotate(glm::mat4(1.0f), ang, axis)
                      * glm::translate(glm::mat4(1.0f), -pivot);
-        for (const char* nm : {upper, lower, tip}) {
+        for (const std::string& nm : {upper, lower, tip}) {
+            if (nm.empty()) continue;
             auto it = girl.boneMap.find(nm);
             if (it != girl.boneMap.end() && it->second.id < (int)girlAnim.finalBoneMatrices.size())
                 girlAnim.finalBoneMatrices[it->second.id] = Rw;
         }
     };
+
+    // Resolve a logical bone to the rig's actual key: exact name first, else the
+    // first key containing a candidate substring. Lets the same swing code drive
+    // either the VRoid (J_Bip / J_Sec) or the Epic-Seven (SK_ / SWING) skeleton.
+    auto resolveBone = [&](std::initializer_list<const char*> cands) -> std::string {
+        for (const char* c : cands) if (girl.boneMap.count(c)) return c;
+        for (auto& kv : girl.boneMap)
+            for (const char* c : cands)
+                if (kv.first.find(c) != std::string::npos) return kv.first;
+        return std::string();
+    };
+    struct LimbNames {
+        std::string lUA, lLA, lH, rUA, rLA, rH, lUL, lLL, lF, rUL, rLL, rF, lB, rB, lBu, rBu;
+    } LN;
+    LN.lUA = resolveBone({"J_Bip_L_UpperArm", "SK_L_Arm_"});
+    LN.lLA = resolveBone({"J_Bip_L_LowerArm", "SK_L_ForeArm_"});
+    LN.lH  = resolveBone({"J_Bip_L_Hand",     "SK_L_Hand_"});
+    LN.rUA = resolveBone({"J_Bip_R_UpperArm", "SK_R_Arm_"});
+    LN.rLA = resolveBone({"J_Bip_R_LowerArm", "SK_R_ForeArm_"});
+    LN.rH  = resolveBone({"J_Bip_R_Hand",     "SK_R_Hand_"});
+    LN.lUL = resolveBone({"J_Bip_L_UpperLeg", "SK_L_UpLeg_"});
+    LN.lLL = resolveBone({"J_Bip_L_LowerLeg", "SK_L_Leg_"});
+    LN.lF  = resolveBone({"J_Bip_L_Foot",     "SK_L_Foot_"});
+    LN.rUL = resolveBone({"J_Bip_R_UpperLeg", "SK_R_UpLeg_"});
+    LN.rLL = resolveBone({"J_Bip_R_LowerLeg", "SK_R_Leg_"});
+    LN.rF  = resolveBone({"J_Bip_R_Foot",     "SK_R_Foot_"});
+    LN.lB  = resolveBone({"J_Sec_L_Bust1",    "SWING000_L_Bust"});
+    LN.rB  = resolveBone({"J_Sec_R_Bust1",    "SWING000_R_Bust"});
+    LN.lBu = resolveBone({"RF_L_HipBack",     "J_Bip_L_UpperLeg"}); // rear jiggle (glute area)
+    LN.rBu = resolveBone({"RF_R_HipBack",     "J_Bip_R_UpperLeg"});
+    std::cerr << "[girl] resolved bones: lUA=" << LN.lUA << " lUL=" << LN.lUL
+              << " bust=" << LN.lB << "/" << LN.rB << " rear=" << LN.lBu << "/" << LN.rBu << "\n";
 
     // Turret: tracks the player when near, else slow scan (Portal-style sentry).
     float turretYaw = 0.0f;
@@ -675,6 +754,16 @@ int main() {
         float now = (float)glfwGetTime();
         dt = now - lastFrame; lastFrame = now;
         input(win);
+
+        // Player-mode gravity + jump (free camera is untouched).
+        if (g_playerMode) {
+            if (glfwGetKey(win, GLFW_KEY_SPACE) == GLFW_PRESS && grounded) {
+                playerVelY = 6.0f; grounded = false;     // jump impulse
+            }
+            playerVelY -= 16.0f * dt;                    // gravity
+            cam.pos.y += playerVelY * dt;
+            if (cam.pos.y <= EYE_H) { cam.pos.y = EYE_H; playerVelY = 0.0f; grounded = true; }
+        }
 
         // LMB: serenade if aiming at turret, else fire blue portal. RMB: orange.
         auto fireSfx = [&]() { if (haveGunSfx) ma_engine_play_sound(&audio, gunSfxPath, nullptr); };
@@ -799,35 +888,102 @@ int main() {
         bool haveGirl = !girl.meshes.empty();
         bool moving = glm::length(cam.pos - prevCamPos) > 0.0005f;
 
+        // Flying = free camera, 3rd person, lifted off the floor → superman glide.
+        bool flying = g_thirdPerson && !g_playerMode && cam.pos.y > EYE_H + 1.0f;
+        // NPC (1st person) either jumps in place or walks a path; the avatar (3rd
+        // person) walks while the camera moves.
+        bool npcJumping = !g_thirdPerson && !g_npcWalk;
+        bool walkActive = (g_thirdPerson && moving) || (!g_thirdPerson && g_npcWalk);
+        float npcJump = npcJumping ? std::fabs(std::sin(now * 2.6f)) * 0.4f : 0.0f;
+
         glm::mat4 girlModel;
+        float bounce = 0.0f;   // torso vertical offset this frame → drives the springs
         if (g_thirdPerson) {
             // Avatar stands at the player's ground position, faces the look dir.
             glm::vec3 feet(cam.pos.x, 0.0f, cam.pos.z);
             float yawAvatar = std::atan2(cam.front.x, cam.front.z) + glm::radians(GIRL_YAW_FIX);
             float bob = 0.0f, sway = 0.0f;
-            if (moving) {                       // fake walk cycle
+            if (moving && !flying) {            // fake walk cycle
                 bob  = std::fabs(std::sin(now * 9.0f)) * 0.07f;
                 sway = std::sin(now * 9.0f) * 0.06f;
             }
-            glm::mat4 m = glm::translate(glm::mat4(1.0f), feet + glm::vec3(0, bob, 0));
+            bounce = bob;
+            glm::vec3 base = flying ? glm::vec3(cam.pos.x, cam.pos.y - 1.0f, cam.pos.z)
+                                    : feet + glm::vec3(0, bob, 0);
+            glm::mat4 m = glm::translate(glm::mat4(1.0f), base);
             m = glm::rotate(m, yawAvatar, glm::vec3(0, 1, 0));
-            m = glm::rotate(m, sway, glm::vec3(0, 0, 1)); // lean side-to-side
+            if (flying) m = glm::rotate(m, glm::radians(80.0f), glm::vec3(1, 0, 0)); // pitch face-down
+            else        m = glm::rotate(m, sway, glm::vec3(0, 0, 1));               // lean side-to-side
+            if (girlNeedsZFlip) m = glm::rotate(m, glm::radians(-90.0f), glm::vec3(1, 0, 0));
+            girlModel = m;
+        } else if (g_npcWalk) {
+            // Patrol: walk a straight line along X, turn 180 at each end, walk back.
+            const float SPD = 1.6f, HALF = 5.0f, ZLANE = 2.5f;
+            float oneWay = (HALF * 2.0f) / SPD;
+            float ph = std::fmod(now, 2.0f * oneWay);
+            float x, yawDeg;
+            if (ph < oneWay) { x = -HALF + SPD * ph;             yawDeg = -90.0f; } // → +X
+            else             { x =  HALF - SPD * (ph - oneWay);  yawDeg =  90.0f; } // → -X
+            bounce = std::fabs(std::sin(now * 9.0f)) * 0.05f;
+            glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(x, 0.0f, ZLANE));
+            m = glm::rotate(m, glm::radians(yawDeg), glm::vec3(0, 1, 0));
             if (girlNeedsZFlip) m = glm::rotate(m, glm::radians(-90.0f), glm::vec3(1, 0, 0));
             girlModel = m;
         } else {
-            girlModel = girlXform(now);          // wandering NPC
+            // NPC plants in front of spawn, faces the player, hops in place.
+            const glm::vec3 GIRL_NPC_POS(0.0f, 0.0f, 1.5f);
+            bounce = npcJump;
+            glm::mat4 m = glm::translate(glm::mat4(1.0f), GIRL_NPC_POS + glm::vec3(0, npcJump, 0));
+            m = glm::rotate(m, glm::radians(180.0f), glm::vec3(0, 1, 0)); // face +Z toward spawn
+            if (girlNeedsZFlip) m = glm::rotate(m, glm::radians(-90.0f), glm::vec3(1, 0, 0));
+            girlModel = m;
         }
+        girlModel = girlModel * girlFit;   // scale/ground the rig into world space
         if (haveGirl) {
             girlAnim.update(dt);
-            // Fake walk cycle: arms/legs swing opposite, only while moving in 3rd person.
-            float a = (g_thirdPerson && moving) ? std::sin(now * 9.0f) * glm::radians(35.0f) : 0.0f;
             glm::vec3 ax(1, 0, 0), ay(0, 1, 0);
-            // Arms are T-posed along X → swing about Y (forward/back). Legs hang
-            // down → swing about X. Opposite phases L/R and arm/leg.
-            swingLimb("J_Bip_L_UpperArm", "J_Bip_L_LowerArm", "J_Bip_L_Hand",  a, ay);
-            swingLimb("J_Bip_R_UpperArm", "J_Bip_R_LowerArm", "J_Bip_R_Hand", -a, ay);
-            swingLimb("J_Bip_L_UpperLeg", "J_Bip_L_LowerLeg", "J_Bip_L_Foot", -a * 0.8f, ax);
-            swingLimb("J_Bip_R_UpperLeg", "J_Bip_R_LowerLeg", "J_Bip_R_Foot",  a * 0.8f, ax);
+            if (flying) {
+                // Superman: arms reach forward (about head), legs trail straight back.
+                swingLimb(LN.lUA, LN.lLA, LN.lH, glm::radians(-150.0f), ax);
+                swingLimb(LN.rUA, LN.rLA, LN.rH, glm::radians(-150.0f), ax);
+                swingLimb(LN.lUL, LN.lLL, LN.lF, glm::radians(10.0f), ax);
+                swingLimb(LN.rUL, LN.rLL, LN.rF, glm::radians(10.0f), ax);
+            } else if (npcJumping) {
+                // Jump pose: arms swing up overhead on the rise, tuck legs slightly.
+                float armUp = -glm::radians(55.0f) - npcJump * glm::radians(90.0f);
+                swingLimb(LN.lUA, LN.lLA, LN.lH, armUp, ax);
+                swingLimb(LN.rUA, LN.rLA, LN.rH, armUp, ax);
+                float legTuck = npcJump * glm::radians(35.0f);
+                swingLimb(LN.lUL, LN.lLL, LN.lF, legTuck, ax);
+                swingLimb(LN.rUL, LN.rLL, LN.rF, legTuck, ax);
+            } else {
+                // Walk cycle: arms and legs swing opposite (contralateral). Arms are
+                // held out from the torso → forward/back swing is about the vertical
+                // axis Y; legs hang down → swing about the left-right axis X.
+                float a = walkActive ? std::sin(now * 9.0f) * glm::radians(35.0f) : 0.0f;
+                swingLimb(LN.lUA, LN.lLA, LN.lH,  a, ay);
+                swingLimb(LN.rUA, LN.rLA, LN.rH, -a, ay);
+                swingLimb(LN.lUL, LN.lLL, LN.lF, -a, ax);
+                swingLimb(LN.rUL, LN.rLL, LN.rF,  a, ax);
+            }
+
+            // Chest spring: torso vertical accel drives a lightly-damped oscillator.
+            float bounceVel = (bounce - prevBounce) / std::max(dt, 1e-4f);
+            prevBounce = bounce;
+            bustVel += (-bounceVel * 60.0f - 22.0f * bustAng - 0.9f * bustVel) * dt;
+            bustAng += bustVel * dt;
+            bustAng = glm::clamp(bustAng, -1.05f, 1.05f);
+            swingLimb(LN.lB, "", "", bustAng, ax);
+            swingLimb(LN.rB, "", "", bustAng, ax);
+            // Rear jiggle (counter-phase, small). No-op if the rig lacks hip-spring bones.
+            float rumpAng = glm::clamp(-bustAng * 0.45f, -0.3f, 0.3f);
+            swingLimb(LN.lBu, "", "", rumpAng, ax);
+            swingLimb(LN.rBu, "", "", rumpAng, ax);
+        }
+        bool showGirl = haveGirl && (g_thirdPerson || g_npcVisible);
+        if (showGirl) {   // upload this frame's bone matrices once; all girl passes share the UBO
+            glBindBuffer(GL_UNIFORM_BUFFER, boneUBO);
+            glBufferSubData(GL_UNIFORM_BUFFER, 0, MAX_BONES * sizeof(glm::mat4), girlAnim.finalBoneMatrices.data());
         }
 
         // cinematic camera: slow orbit around scene center
@@ -883,11 +1039,10 @@ int main() {
             depth.use();
             depth.setMat4("lightSpaceMatrix", lightSpace);
             for (auto& it : items) if (!it.useAlpha) renderDepth(it, depth);
-            if (haveGirl) {
+            if (showGirl) {
                 depthSkinned.use();
                 depthSkinned.setMat4("lightSpaceMatrix", lightSpace);
                 depthSkinned.setMat4("model", girlModel);
-                depthSkinned.setMat4Array("bones", girlAnim.finalBoneMatrices.data(), MAX_BONES);
                 girl.draw(depthSkinned);
             }
             glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -902,9 +1057,9 @@ int main() {
         glm::mat4 view = glm::lookAt(eye, cam.pos + cam.front, cam.up);
         glm::mat4 proj = glm::perspective(glm::radians(cam.fov), (float)SCR_W / (float)SCR_H, 0.1f, 200.0f);
 
-        auto setSceneUniforms = [&](const Shader& s) {
+        auto setSceneUniforms = [&](const Shader& s, const glm::mat4& V) {
             s.use();
-            s.setMat4("view", view);
+            s.setMat4("view", V);
             s.setMat4("proj", proj);
             s.setMat4("lightSpaceMatrix", lightSpace);
             s.setVec3("viewPos", cam.pos);
@@ -923,16 +1078,10 @@ int main() {
             if (haveSkybox) { glActiveTexture(GL_TEXTURE4); glBindTexture(GL_TEXTURE_CUBE_MAP, skybox.cubemap); s.setInt("envMap", 4); }
         };
 
-        // opaque static geometry (incl. house: glass is alpha-cutout, see §useAlpha==2)
-        setSceneUniforms(scene);
-        for (auto& it : items)
-            if (!it.useAlpha)
-                renderItem(it, scene, tog.multiTex, tog.normalMap, tog.envMap);
-
-        // animated girl
-        if (haveGirl) {
-            setSceneUniforms(sceneSkinned);
-            sceneSkinned.setMat4Array("bones", girlAnim.finalBoneMatrices.data(), MAX_BONES);
+        // Draw the skinned girl (bones uploaded once per frame via the UBO).
+        auto drawGirl = [&](const glm::mat4& V) {
+            if (!haveGirl) return;
+            setSceneUniforms(sceneSkinned, V);
             sceneSkinned.setMat4("model", girlModel);
             sceneSkinned.setInt("useMultiTex", 0);
             sceneSkinned.setInt("useNormalMap", tog.normalMap ? 1 : 0);
@@ -940,7 +1089,15 @@ int main() {
             sceneSkinned.setInt("useAlpha", 0);
             sceneSkinned.setInt("useEmissive", 0);
             girl.draw(sceneSkinned);
-        }
+        };
+
+        // ---- main pass ----
+        setSceneUniforms(scene, view);
+        for (auto& it : items)
+            if (!it.useAlpha)
+                renderItem(it, scene, tog.multiTex, tog.normalMap, tog.envMap);
+
+        if (showGirl) drawGirl(view);
 
         // portals — emissive quads (unlit), pulsing
         auto drawPortal = [&](const Portal& p, glm::vec3 col) {
@@ -974,7 +1131,12 @@ int main() {
             glm::vec3 f = glm::normalize(cam.front);
             glm::vec3 r = glm::normalize(glm::cross(f, cam.up));
             glm::vec3 u = glm::cross(r, f);
-            glm::vec3 handPos = cam.pos + f * GUN_OFFSET.z + r * GUN_OFFSET.x + u * GUN_OFFSET.y;
+            // View-bob: figure-8 sway while walking so the gun bobs with your steps.
+            // Vertical at 2x horizontal frequency = classic FPS bob. Zero when still.
+            float bobX = moving ? std::cos(now * 5.0f)  * 0.018f : 0.0f;
+            float bobY = moving ? std::sin(now * 10.0f) * 0.012f : 0.0f;
+            glm::vec3 handPos = cam.pos + f * GUN_OFFSET.z
+                              + r * (GUN_OFFSET.x + bobX) + u * (GUN_OFFSET.y + bobY);
             glm::mat4 basis(1.0f);
             basis[0] = glm::vec4(r, 0); basis[1] = glm::vec4(u, 0); basis[2] = glm::vec4(-f, 0);
             glm::mat4 fix(1.0f);
@@ -985,7 +1147,7 @@ int main() {
                         * glm::scale(glm::mat4(1.0f), glm::vec3(gunScale))
                         * glm::translate(glm::mat4(1.0f), -gunCenter);
             if (!g_thirdPerson) glClear(GL_DEPTH_BUFFER_BIT); // always-on-top viewmodel
-            setSceneUniforms(scene);
+            setSceneUniforms(scene, view);
             scene.setInt("useMultiTex", 0); scene.setInt("useNormalMap", 0);
             scene.setInt("useEnvMap", 0); scene.setInt("useAlpha", 0); scene.setInt("useEmissive", 0);
             scene.setMat4("model", M);
@@ -997,7 +1159,7 @@ int main() {
             "1 Multi-tex   2 Normal   3 EnvMap   4 Fog   5 Blending\n"
             "6 Shadow      7 Spot     8 PtLight  9 Sky   C Cinematica\n"
             "Click esq mirar na turret = serenata   P parar musica\n"
-            "WASD mover  Mouse olhar  Space/Shift sub/desc  Esc sair";
+            "WASD mover  F jogador  F5 1a/3a  N npc  B andar/pular";
         hud.drawRect(20, SCR_H - 130, 760, 110, SCR_W, SCR_H, glm::vec4(0, 0, 0, 0.55f));
         hud.draw(legend, 30, SCR_H - 115, SCR_W, SCR_H, glm::vec4(1, 1, 1, 0.95f), 2.0f);
         // Transient tooltip (top-center) — fades out after HUD_DURATION

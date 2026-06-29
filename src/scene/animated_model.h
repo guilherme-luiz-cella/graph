@@ -8,7 +8,7 @@
 #include "model.h"
 
 constexpr int MAX_BONE_INFLUENCE = 4;
-constexpr int MAX_BONES = 100;
+constexpr int MAX_BONES = 450;
 
 struct AnimVertex {
     glm::vec3 pos{};
