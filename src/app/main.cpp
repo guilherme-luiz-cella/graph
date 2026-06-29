@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <cmath>
 #include <vector>
+#include <functional>
 #include <cstdlib>
 
 #include "shader.h"
@@ -696,27 +697,9 @@ int main() {
     float bustAng = 0.0f, bustVel = 0.0f;
     float prevBounce = 0.0f;   // last frame's torso vertical offset (for spring drive)
 
-    // Rotate a limb (upper+lower+hand/foot) rigidly about the upper joint, in mesh
-    // space, so it swings without tearing. angle=0 → bind pose.
-    auto swingLimb = [&](const std::string& upper, const std::string& lower, const std::string& tip,
-                         float ang, glm::vec3 axis) {
-        auto itU = girl.boneMap.find(upper);
-        if (itU == girl.boneMap.end()) return;
-        glm::vec3 pivot = glm::vec3(glm::inverse(itU->second.offset)[3]);
-        glm::mat4 Rw = glm::translate(glm::mat4(1.0f), pivot)
-                     * glm::rotate(glm::mat4(1.0f), ang, axis)
-                     * glm::translate(glm::mat4(1.0f), -pivot);
-        for (const std::string& nm : {upper, lower, tip}) {
-            if (nm.empty()) continue;
-            auto it = girl.boneMap.find(nm);
-            if (it != girl.boneMap.end() && it->second.id < (int)girlAnim.finalBoneMatrices.size())
-                girlAnim.finalBoneMatrices[it->second.id] = Rw;
-        }
-    };
-
     // Resolve a logical bone to the rig's actual key: exact name first, else the
-    // first key containing a candidate substring. Lets the same swing code drive
-    // either the VRoid (J_Bip / J_Sec) or the Epic-Seven (SK_ / SWING) skeleton.
+    // first key containing a candidate substring. Handles VRoid (J_Bip / J_Sec) or
+    // the Epic-Seven (SK_ / SWING) skeleton.
     auto resolveBone = [&](std::initializer_list<const char*> cands) -> std::string {
         for (const char* c : cands) if (girl.boneMap.count(c)) return c;
         for (auto& kv : girl.boneMap)
@@ -724,27 +707,47 @@ int main() {
                 if (kv.first.find(c) != std::string::npos) return kv.first;
         return std::string();
     };
-    struct LimbNames {
-        std::string lUA, lLA, lH, rUA, rLA, rH, lUL, lLL, lF, rUL, rLL, rF, lB, rB, lBu, rBu;
-    } LN;
-    LN.lUA = resolveBone({"J_Bip_L_UpperArm", "SK_L_Arm_"});
-    LN.lLA = resolveBone({"J_Bip_L_LowerArm", "SK_L_ForeArm_"});
-    LN.lH  = resolveBone({"J_Bip_L_Hand",     "SK_L_Hand_"});
-    LN.rUA = resolveBone({"J_Bip_R_UpperArm", "SK_R_Arm_"});
-    LN.rLA = resolveBone({"J_Bip_R_LowerArm", "SK_R_ForeArm_"});
-    LN.rH  = resolveBone({"J_Bip_R_Hand",     "SK_R_Hand_"});
-    LN.lUL = resolveBone({"J_Bip_L_UpperLeg", "SK_L_UpLeg_"});
-    LN.lLL = resolveBone({"J_Bip_L_LowerLeg", "SK_L_Leg_"});
-    LN.lF  = resolveBone({"J_Bip_L_Foot",     "SK_L_Foot_"});
-    LN.rUL = resolveBone({"J_Bip_R_UpperLeg", "SK_R_UpLeg_"});
-    LN.rLL = resolveBone({"J_Bip_R_LowerLeg", "SK_R_Leg_"});
-    LN.rF  = resolveBone({"J_Bip_R_Foot",     "SK_R_Foot_"});
-    LN.lB  = resolveBone({"J_Sec_L_Bust1",    "SWING000_L_Bust"});
-    LN.rB  = resolveBone({"J_Sec_R_Bust1",    "SWING000_R_Bust"});
-    LN.lBu = resolveBone({"RF_L_HipBack",     "J_Bip_L_UpperLeg"}); // rear jiggle (glute area)
-    LN.rBu = resolveBone({"RF_R_HipBack",     "J_Bip_R_UpperLeg"});
-    std::cerr << "[girl] resolved bones: lUA=" << LN.lUA << " lUL=" << LN.lUL
-              << " bust=" << LN.lB << "/" << LN.rB << " rear=" << LN.lBu << "/" << LN.rBu << "\n";
+    // All bone ids in the subtree rooted at `root`. Rotating the WHOLE limb chain
+    // (upper, lower, hand, twist bones, fingers) rigidly avoids the stretching you
+    // get from moving only the named bones while the rest stay at bind pose.
+    auto subtreeBones = [&](const std::string& root) -> std::vector<int> {
+        std::vector<int> ids;
+        if (root.empty() || !girl.scene) return ids;
+        std::function<void(const aiNode*, bool)> dfs = [&](const aiNode* n, bool inside) {
+            bool here = inside || root == std::string(n->mName.C_Str());
+            if (here) { auto it = girl.boneMap.find(n->mName.C_Str());
+                        if (it != girl.boneMap.end()) ids.push_back(it->second.id); }
+            for (unsigned i = 0; i < n->mNumChildren; ++i) dfs(n->mChildren[i], here);
+        };
+        dfs(girl.scene->mRootNode, false);
+        return ids;
+    };
+    struct Limb { std::vector<int> ids; glm::vec3 pivot{0.0f}; };
+    auto makeLimb = [&](const std::string& root) -> Limb {
+        Limb L; L.ids = subtreeBones(root);
+        auto it = girl.boneMap.find(root);
+        if (it != girl.boneMap.end()) L.pivot = glm::vec3(glm::inverse(it->second.offset)[3]);
+        return L;
+    };
+    Limb lArm  = makeLimb(resolveBone({"J_Bip_L_UpperArm", "SK_L_Arm_"}));
+    Limb rArm  = makeLimb(resolveBone({"J_Bip_R_UpperArm", "SK_R_Arm_"}));
+    Limb lLeg  = makeLimb(resolveBone({"J_Bip_L_UpperLeg", "SK_L_UpLeg_"}));
+    Limb rLeg  = makeLimb(resolveBone({"J_Bip_R_UpperLeg", "SK_R_UpLeg_"}));
+    Limb lBust = makeLimb(resolveBone({"J_Sec_L_Bust1", "SWING000_L_Bust"}));
+    Limb rBust = makeLimb(resolveBone({"J_Sec_R_Bust1", "SWING000_R_Bust"}));
+
+    // Rotate every bone in a limb subtree rigidly about its root pivot. ang=0 → bind.
+    auto swing = [&](const Limb& L, float ang, glm::vec3 axis) {
+        if (L.ids.empty()) return;
+        glm::mat4 Rw = glm::translate(glm::mat4(1.0f), L.pivot)
+                     * glm::rotate(glm::mat4(1.0f), ang, axis)
+                     * glm::translate(glm::mat4(1.0f), -L.pivot);
+        for (int id : L.ids)
+            if (id < (int)girlAnim.finalBoneMatrices.size())
+                girlAnim.finalBoneMatrices[id] = Rw;
+    };
+    std::cerr << "[girl] limb bone counts: lArm=" << lArm.ids.size() << " lLeg=" << lLeg.ids.size()
+              << " bust=" << lBust.ids.size() << "\n";
 
     // Turret: tracks the player when near, else slow scan (Portal-style sentry).
     float turretYaw = 0.0f;
@@ -941,30 +944,23 @@ int main() {
         girlModel = girlModel * girlFit;   // scale/ground the rig into world space
         if (haveGirl) {
             girlAnim.update(dt);
-            glm::vec3 ax(1, 0, 0), ay(0, 1, 0);
+            // Arms rest in an A-pose diagonal, legs hang straight down. Both swing
+            // forward/back about the world left-right axis X (a sagittal pendulum).
+            glm::vec3 ax(1, 0, 0);
             if (flying) {
-                // Superman: arms reach forward (about head), legs trail straight back.
-                swingLimb(LN.lUA, LN.lLA, LN.lH, glm::radians(-150.0f), ax);
-                swingLimb(LN.rUA, LN.rLA, LN.rH, glm::radians(-150.0f), ax);
-                swingLimb(LN.lUL, LN.lLL, LN.lF, glm::radians(10.0f), ax);
-                swingLimb(LN.rUL, LN.rLL, LN.rF, glm::radians(10.0f), ax);
+                swing(lArm, glm::radians(-150.0f), ax); swing(rArm, glm::radians(-150.0f), ax);
+                swing(lLeg, glm::radians(10.0f), ax);   swing(rLeg, glm::radians(10.0f), ax);
             } else if (npcJumping) {
-                // Jump pose: arms swing up overhead on the rise, tuck legs slightly.
-                float armUp = -glm::radians(55.0f) - npcJump * glm::radians(90.0f);
-                swingLimb(LN.lUA, LN.lLA, LN.lH, armUp, ax);
-                swingLimb(LN.rUA, LN.rLA, LN.rH, armUp, ax);
-                float legTuck = npcJump * glm::radians(35.0f);
-                swingLimb(LN.lUL, LN.lLL, LN.lF, legTuck, ax);
-                swingLimb(LN.rUL, LN.rLL, LN.rF, legTuck, ax);
+                // Arms swing forward/up on the rise, legs tuck — symmetric.
+                float armUp = -glm::radians(40.0f) - npcJump * glm::radians(50.0f);
+                swing(lArm, armUp, ax); swing(rArm, armUp, ax);
+                float legTuck = npcJump * glm::radians(25.0f);
+                swing(lLeg, legTuck, ax); swing(rLeg, legTuck, ax);
             } else {
-                // Walk cycle: arms and legs swing opposite (contralateral). Arms are
-                // held out from the torso → forward/back swing is about the vertical
-                // axis Y; legs hang down → swing about the left-right axis X.
+                // Walk: arms and legs swing opposite (contralateral).
                 float a = walkActive ? std::sin(now * 9.0f) * glm::radians(35.0f) : 0.0f;
-                swingLimb(LN.lUA, LN.lLA, LN.lH,  a, ay);
-                swingLimb(LN.rUA, LN.rLA, LN.rH, -a, ay);
-                swingLimb(LN.lUL, LN.lLL, LN.lF, -a, ax);
-                swingLimb(LN.rUL, LN.rLL, LN.rF,  a, ax);
+                swing(lArm,  a, ax); swing(rArm, -a, ax);
+                swing(lLeg, -a, ax); swing(rLeg,  a, ax);
             }
 
             // Chest spring: torso vertical accel drives a lightly-damped oscillator.
@@ -973,12 +969,8 @@ int main() {
             bustVel += (-bounceVel * 60.0f - 22.0f * bustAng - 0.9f * bustVel) * dt;
             bustAng += bustVel * dt;
             bustAng = glm::clamp(bustAng, -1.05f, 1.05f);
-            swingLimb(LN.lB, "", "", bustAng, ax);
-            swingLimb(LN.rB, "", "", bustAng, ax);
-            // Rear jiggle (counter-phase, small). No-op if the rig lacks hip-spring bones.
-            float rumpAng = glm::clamp(-bustAng * 0.45f, -0.3f, 0.3f);
-            swingLimb(LN.lBu, "", "", rumpAng, ax);
-            swingLimb(LN.rBu, "", "", rumpAng, ax);
+            swing(lBust, bustAng, ax);
+            swing(rBust, bustAng, ax);
         }
         bool showGirl = haveGirl && (g_thirdPerson || g_npcVisible);
         if (showGirl) {   // upload this frame's bone matrices once; all girl passes share the UBO
