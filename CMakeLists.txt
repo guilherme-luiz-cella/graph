@@ -10,6 +10,18 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Default to Release; Debug builds are huge and slow.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
+endif()
+
+# Link-time optimization (release builds only).
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_ok OUTPUT ipo_err)
+if(ipo_ok)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+endif()
+
 include(FetchContent)
 
 # --- GLFW ---
@@ -41,6 +53,13 @@ set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+# Only build the importers we actually load. Drops ~70 formats → ~5.
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_FBX_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_3DS_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(assimp)
 
 # --- GLAD (generated, GL 3.3 core) ---
@@ -61,19 +80,25 @@ add_library(miniaudio INTERFACE)
 target_include_directories(miniaudio INTERFACE vendor/miniaudio)
 
 # --- App ---
+# Sources grouped by concern: app / core / scene / render / gameplay.
 add_executable(cg_final
-    src/main.cpp
-    src/shader.cpp
-    src/camera.cpp
-    src/model.cpp
-    src/skybox.cpp
-    src/primitives.cpp
-    src/animated_model.cpp
-    src/animator.cpp
-    src/procgen.cpp
+    src/app/main.cpp
+    src/core/shader.cpp
+    src/core/camera.cpp
+    src/scene/model.cpp
+    src/scene/skybox.cpp
+    src/scene/primitives.cpp
+    src/scene/animated_model.cpp
+    src/scene/animator.cpp
+    src/scene/procgen.cpp
+    src/render/render.cpp
+    src/render/hud.cpp
+    src/gameplay/portal.cpp
 )
 
-target_include_directories(cg_final PRIVATE src)
+# All concern dirs on the include path so headers stay flat (#include "shader.h").
+target_include_directories(cg_final PRIVATE
+    src/core src/scene src/render src/gameplay)
 target_link_libraries(cg_final PRIVATE glfw glad glm::glm assimp stb miniaudio)
 
 # Copy shaders + assets next to binary
@@ -87,3 +112,16 @@ add_custom_command(TARGET cg_final POST_BUILD
 if(APPLE)
     target_link_libraries(cg_final PRIVATE "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
 endif()
+
+# Strip symbols from release binary.
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_custom_command(TARGET cg_final POST_BUILD
+        COMMAND ${CMAKE_STRIP} $<TARGET_FILE:cg_final>)
+endif()
+
+# --- Tests (GL-free portal math) ---
+enable_testing()
+add_executable(test_portal tests/test_portal.cpp src/gameplay/portal.cpp)
+target_include_directories(test_portal PRIVATE src/gameplay)
+target_link_libraries(test_portal PRIVATE glm::glm)
+add_test(NAME portal COMMAND test_portal)

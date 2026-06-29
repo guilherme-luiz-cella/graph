@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apresentação — Computação Gráfica</title>
+<style>
+  :root{
+    --blue:#3aa0ff; --orange:#ff8a3a; --bg:#0a0e1a; --fg:#e8ecf5; --muted:#8a93a8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    background:radial-gradient(circle at 30% 20%,#10182e 0%,var(--bg) 70%);
+    color:var(--fg);overflow:hidden;
+  }
+  /* moving starfield-ish backdrop */
+  body::before{
+    content:"";position:fixed;inset:0;z-index:0;
+    background:
+      radial-gradient(2px 2px at 20% 30%,#ffffff22,transparent),
+      radial-gradient(2px 2px at 70% 60%,#ffffff18,transparent),
+      radial-gradient(1px 1px at 50% 80%,#ffffff22,transparent);
+    background-size:200px 200px;animation:drift 40s linear infinite;
+  }
+  @keyframes drift{to{background-position:200px 200px}}
+
+  .deck{position:relative;z-index:1;height:100vh;width:100vw}
+  .slide{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    justify-content:center;align-items:center;padding:6vh 10vw;text-align:center;
+    opacity:0;transform:translateY(40px) scale(.98);
+    transition:opacity .5s ease,transform .5s ease;pointer-events:none;
+  }
+  .slide.active{opacity:1;transform:none;pointer-events:auto}
+  h1{font-size:clamp(2rem,6vw,4.2rem);line-height:1.05;margin-bottom:.4em;
+     background:linear-gradient(90deg,var(--blue),var(--orange));
+     -webkit-background-clip:text;background-clip:text;color:transparent}
+  h2{font-size:clamp(1.4rem,4vw,2.6rem);margin-bottom:.6em;color:var(--fg)}
+  p.sub{color:var(--muted);font-size:clamp(1rem,2.2vw,1.3rem)}
+  ul{list-style:none;text-align:left;font-size:clamp(1rem,2.4vw,1.5rem);max-width:60ch}
+  li{margin:.5em 0;opacity:0;transform:translateX(-20px);
+     animation:reveal .5s forwards}
+  .active li:nth-child(1){animation-delay:.15s}
+  .active li:nth-child(2){animation-delay:.30s}
+  .active li:nth-child(3){animation-delay:.45s}
+  .active li:nth-child(4){animation-delay:.60s}
+  .active li:nth-child(5){animation-delay:.75s}
+  .active li:nth-child(6){animation-delay:.90s}
+  .active li:nth-child(7){animation-delay:1.05s}
+  .active li:nth-child(8){animation-delay:1.20s}
+  .active li:nth-child(9){animation-delay:1.35s}
+  @keyframes reveal{to{opacity:1;transform:none}}
+  li b{color:var(--orange)}
+  kbd{background:#1c2742;border:1px solid #2e3d63;border-bottom-width:3px;
+      border-radius:6px;padding:.1em .5em;font-family:ui-monospace,monospace;
+      font-size:.85em;color:var(--blue)}
+  table{border-collapse:collapse;font-size:clamp(.8rem,1.8vw,1.15rem)}
+  td,th{border:1px solid #25304f;padding:.4em .8em;text-align:left}
+  th{background:#15203b;color:var(--blue)}
+  .ok{color:#5ed47a;font-weight:bold}
+
+  /* spinning portals on the title */
+  .portals{display:flex;gap:4vw;margin:1.2em 0}
+  .portal{width:clamp(90px,14vw,180px);aspect-ratio:1/1.4;border-radius:50%;
+    position:relative;animation:spin 6s linear infinite}
+  .portal::before{content:"";position:absolute;inset:0;border-radius:50%;
+    background:conic-gradient(var(--c),transparent,var(--c),transparent,var(--c));
+    -webkit-mask:radial-gradient(transparent 38%,#000 42%);
+            mask:radial-gradient(transparent 38%,#000 42%);
+    box-shadow:0 0 40px var(--c),inset 0 0 30px var(--c)}
+  .portal.blue{--c:var(--blue)}
+  .portal.orange{--c:var(--orange);animation-direction:reverse}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  /* floating cube */
+  .cube{width:60px;height:60px;margin-top:1em;border:3px solid var(--orange);
+    border-radius:8px;background:linear-gradient(135deg,#3a2a18,#5a4226);
+    box-shadow:0 0 20px #ff8a3a55;animation:float 3s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0) rotate(-6deg)}
+                   50%{transform:translateY(-16px) rotate(6deg)}}
+
+  .hud{position:fixed;z-index:2;bottom:18px;left:0;right:0;display:flex;
+       justify-content:center;gap:18px;color:var(--muted);font-size:.9rem;align-items:center}
+  .bar{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--blue),var(--orange));
+       transition:width .4s ease;z-index:3}
+  .dot{width:9px;height:9px;border-radius:50%;background:#2a3a5c;cursor:pointer}
+  .dot.on{background:var(--orange)}
+  .nav{color:var(--muted);font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="bar" id="bar"></div>
+<div class="deck" id="deck">
+
+  <section class="slide">
+    <h1>Computação Gráfica<br>Trabalho Final</h1>
+    <div class="portals">
+      <div class="portal blue"></div>
+      <div class="portal orange"></div>
+    </div>
+    <p class="sub">Cena interativa em OpenGL 3.3 / C++17 — mecânicas de <i>Portal</i></p>
+    <p class="sub">Guilherme Luiz Cella · 105491</p>
+  </section>
+
+  <section class="slide">
+    <h2>Stack</h2>
+    <ul>
+      <li><b>C++17</b> + <b>OpenGL 3.3 Core</b></li>
+      <li>GLFW · GLAD · GLM</li>
+      <li><b>ASSIMP</b> — modelos .3ds / .glb / .fbx + animação esqueletal</li>
+      <li>stb_image (texturas) · miniaudio (som)</li>
+      <li><b>CMake + FetchContent</b> — zero instalação além do cmake</li>
+      <li>Release + LTO + strip → binário ~2 MB</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>Controles</h2>
+    <ul>
+      <li><kbd>WASD</kbd> mover · <kbd>Mouse</kbd> olhar · <kbd>Space/Shift</kbd> subir/descer</li>
+      <li><kbd>Botão Esq.</kbd> mirar turret → serenata, senão <b>portal AZUL</b></li>
+      <li><kbd>Botão Dir.</kbd> <b>portal LARANJA</b></li>
+      <li><kbd>G</kbd> mostra/esconde a portal gun</li>
+      <li><kbd>E</kbd> agarra / arremessa o cubo</li>
+      <li><kbd>F5</kbd> câmera 1ª / 3ª pessoa</li>
+      <li><kbd>1</kbd>–<kbd>9</kbd> toggles de técnica · <kbd>C</kbd> cinemática</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>Técnicas gráficas <span class="sub">(spec §2)</span></h2>
+    <ul>
+      <li><kbd>1</kbd> Multi-textura — chão pedra→grama (smoothstep radial)</li>
+      <li><kbd>2</kbd> Normal mapping — parede de tijolos (espaço tangente)</li>
+      <li><kbd>3</kbd> Environment map — esfera reflete o cubemap</li>
+      <li><kbd>4</kbd> Fog linear · <kbd>5</kbd> Blending (lanterna)</li>
+      <li><kbd>6</kbd> Shadow map — FBO 2048², PCF 3×3</li>
+      <li><kbd>7</kbd> luz spot · <kbd>8</kbd> luz point · <kbd>9</kbd> skybox</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>Modelos & cena</h2>
+    <ul>
+      <li><b>Castelo</b> — modelo <b>.3DS</b> + textura stone_wall (spec §2a/b)</li>
+      <li><b>Casa</b> — minecraft_house.glb com <b>vidro see-through</b> (alpha)</li>
+      <li><b>Turret</b> — varredura procedural + serenata (clique)</li>
+      <li><b>Personagem</b> — pipeline skinned (ossos no vertex shader)</li>
+      <li><b>Skybox</b> cubemap · grama PBR real</li>
+    </ul>
+  </section>
+
+  <section class="slide">
+    <h2>Mecânicas de Portal</h2>
+    <div class="portals">
+      <div class="portal blue" style="width:110px"></div>
+      <div class="portal orange" style="width:110px"></div>
+    </div>
+    <ul>
+      <li><b>Portal gun</b> na mão (viewmodel) + som de tiro</li>
+      <li>Dispara <b>2 portais</b> (azul / laranja) em paredes e chão</li>
+      <li>Atravessar → <b>teleporta</b> levando a direção do olhar</li>
+      <li><b>Cubo</b> com gravidade que <b>atravessa portais</b> com momento</li>
+    </ul>
+    <div class="cube"></div>
+  </section>
+
+  <section class="slide">
+    <h2>Cobertura da Spec</h2>
+    <table>
+      <tr><th>Req</th><th>Elemento</th><th></th></tr>
+      <tr><td>2a/b</td><td>Modelo .3DS + UV</td><td class="ok">✔</td></tr>
+      <tr><td>2c</td><td>Iluminação spot + point (Phong)</td><td class="ok">✔</td></tr>
+      <tr><td>2d–f</td><td>Multi-textura · Skybox · EnvMap</td><td class="ok">✔</td></tr>
+      <tr><td>2g–j</td><td>Normal map · Fog · Blending · Shadow</td><td class="ok">✔</td></tr>
+      <tr><td>3b/c</td><td>Pipeline skeletal · Som</td><td class="ok">✔</td></tr>
+    </table>
+  </section>
+
+  <section class="slide">
+    <h1>Obrigado!</h1>
+    <p class="sub">Extra: portais, física do cubo, câmera 1ª/3ª pessoa,</p>
+    <p class="sub">código modular (app/core/scene/render/gameplay) + testes.</p>
+    <div class="portals" style="margin-top:1.5em">
+      <div class="portal blue"></div>
+      <div class="portal orange"></div>
+    </div>
+  </section>
+
+</div>
+
+<div class="hud">
+  <span class="nav">← → ou Espaço para navegar · F = tela cheia</span>
+  <span id="dots"></span>
+</div>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];
+  const bar=document.getElementById('bar');
+  const dotsEl=document.getElementById('dots');
+  let i=0;
+  slides.forEach((_,n)=>{
+    const d=document.createElement('span');d.className='dot';d.title='Slide '+(n+1);
+    d.style.display='inline-block';d.style.margin='0 3px';
+    d.onclick=()=>go(n);dotsEl.appendChild(d);
+  });
+  const dots=[...document.querySelectorAll('.dot')];
+  function go(n){
+    i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('active',k===i));
+    dots.forEach((d,k)=>d.classList.toggle('on',k===i));
+    bar.style.width=((i+1)/slides.length*100)+'%';
+  }
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight',' ','PageDown'].includes(e.key)){go(i+1);e.preventDefault();}
+    else if(['ArrowLeft','PageUp'].includes(e.key)){go(i-1);e.preventDefault();}
+    else if(e.key==='Home')go(0);
+    else if(e.key==='End')go(slides.length-1);
+    else if(e.key.toLowerCase()==='f'){
+      if(!document.fullscreenElement)document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  });
+  document.getElementById('deck').addEventListener('click',e=>{
+    if(e.clientX > window.innerWidth*0.5) go(i+1); else go(i-1);
+  });
+  go(0);
+</script>
+</body>
+</html>
